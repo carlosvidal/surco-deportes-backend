@@ -1,0 +1,189 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────
+// USUARIOS DEL SISTEMA (Staff)
+// ─────────────────────────────────────────────────────────
+
+model Staff {
+  id          Int       @id @default(autoincrement())
+  nombre      String
+  usuario     String    @unique
+  password    String
+  rol         Rol       @default(RECEPCION)
+  activo      Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  compras     Compra[]
+  consumos    Consumo[]
+  cajas       Caja[]
+
+  @@map("staff")
+}
+
+enum Rol {
+  RECEPCION
+  ADMIN_SEDE
+  ADMIN_MUNICIPAL
+}
+
+// ─────────────────────────────────────────────────────────
+// VECINOS
+// ─────────────────────────────────────────────────────────
+
+model Vecino {
+  dni                 String    @id @db.VarChar(8)
+  nombre              String
+  apellidos           String
+  fechaNacimiento     DateTime? @map("fecha_nacimiento")
+  telefono            String?
+  email               String?
+  distrito            String
+  esSurco             Boolean   @default(false) @map("es_surco")
+  contactoEmergencia  String?   @map("contacto_emergencia")
+  telefonoEmergencia  String?   @map("telefono_emergencia")
+  activo              Boolean   @default(true)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  // Relaciones familiares
+  titularDe           Familia[] @relation("Titular")
+  miembroDe           Familia[] @relation("Miembro")
+
+  compras             Compra[]
+  consumos            Consumo[]
+
+  @@map("vecinos")
+}
+
+model Familia {
+  id          Int         @id @default(autoincrement())
+  titularDni  String      @map("titular_dni")
+  miembroDni  String      @map("miembro_dni")
+  parentesco  Parentesco
+  createdAt   DateTime    @default(now())
+
+  titular     Vecino      @relation("Titular", fields: [titularDni], references: [dni])
+  miembro     Vecino      @relation("Miembro", fields: [miembroDni], references: [dni])
+
+  @@unique([titularDni, miembroDni])
+  @@map("familias")
+}
+
+enum Parentesco {
+  HIJO
+  HIJA
+  CONYUGE
+  OTRO
+}
+
+// ─────────────────────────────────────────────────────────
+// COMPRAS (Billetera de Horas)
+// ─────────────────────────────────────────────────────────
+
+model Compra {
+  id          Int           @id @default(autoincrement())
+  vecinoDni   String        @map("vecino_dni")
+  horas       Int
+  monto       Decimal       @db.Decimal(10, 2)
+  metodoPago  MetodoPago    @map("metodo_pago")
+  referencia  String?       // Para pagos digitales
+  anulada     Boolean       @default(false)
+  motivoAnul  String?       @map("motivo_anulacion")
+  staffId     Int           @map("staff_id")
+  cajaId      Int?          @map("caja_id")
+  createdAt   DateTime      @default(now())
+
+  vecino      Vecino        @relation(fields: [vecinoDni], references: [dni])
+  staff       Staff         @relation(fields: [staffId], references: [id])
+  caja        Caja?         @relation(fields: [cajaId], references: [id])
+
+  @@map("compras")
+}
+
+enum MetodoPago {
+  EFECTIVO
+  YAPE
+  PLIN
+  TRANSFERENCIA
+}
+
+// ─────────────────────────────────────────────────────────
+// CONSUMOS (Check-in / Check-out)
+// ─────────────────────────────────────────────────────────
+
+model Consumo {
+  id            Int           @id @default(autoincrement())
+  vecinoDni     String        @map("vecino_dni")
+  instalacion   Instalacion
+  carril        Int?          // Solo para piscinas
+  entradaAt     DateTime      @default(now()) @map("entrada_at")
+  salidaAt      DateTime?     @map("salida_at")
+  salidaAuto    Boolean       @default(false) @map("salida_auto")
+  anulado       Boolean       @default(false)
+  motivoAnul    String?       @map("motivo_anulacion")
+  staffId       Int           @map("staff_id")
+  createdAt     DateTime      @default(now())
+
+  vecino        Vecino        @relation(fields: [vecinoDni], references: [dni])
+  staff         Staff         @relation(fields: [staffId], references: [id])
+
+  @@map("consumos")
+}
+
+enum Instalacion {
+  PISCINA_ADULTOS
+  PISCINA_NINOS
+  PADDLE
+  GIMNASIO
+  PARRILLAS
+}
+
+// ─────────────────────────────────────────────────────────
+// CAJA
+// ─────────────────────────────────────────────────────────
+
+model Caja {
+  id              Int       @id @default(autoincrement())
+  fecha           DateTime  @db.Date
+  saldoInicial    Decimal   @default(0) @map("saldo_inicial") @db.Decimal(10, 2)
+  saldoFinal      Decimal?  @map("saldo_final") @db.Decimal(10, 2)
+  saldoDeclarado  Decimal?  @map("saldo_declarado") @db.Decimal(10, 2)
+  diferencia      Decimal?  @db.Decimal(10, 2)
+  observaciones   String?
+  cerradaAt       DateTime? @map("cerrada_at")
+  staffId         Int       @map("staff_id")
+  createdAt       DateTime  @default(now())
+
+  staff           Staff     @relation(fields: [staffId], references: [id])
+  compras         Compra[]
+
+  @@unique([fecha])
+  @@map("cajas")
+}
+
+// ─────────────────────────────────────────────────────────
+// LOG DE AUDITORÍA
+// ─────────────────────────────────────────────────────────
+
+model AuditLog {
+  id          Int       @id @default(autoincrement())
+  entidad     String    // vecinos, compras, consumos, etc.
+  entidadId   String    @map("entidad_id")
+  accion      String    // CREATE, UPDATE, ANULAR
+  datos       Json?     // Snapshot del cambio
+  staffId     Int?      @map("staff_id")
+  ip          String?
+  createdAt   DateTime  @default(now())
+
+  @@map("audit_log")
+}
