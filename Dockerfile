@@ -23,8 +23,8 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Install OpenSSL for Prisma
-RUN apk add --no-cache openssl
+# Install OpenSSL for Prisma and curl for healthcheck
+RUN apk add --no-cache openssl curl
 
 COPY package*.json ./
 COPY prisma ./prisma/

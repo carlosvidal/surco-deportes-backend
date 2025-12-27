@@ -18,6 +18,11 @@ app.use((req, res, next) => {
   next();
 });
 
+// Root health check for Coolify
+app.get('/', (req, res) => {
+  res.status(200).send('OK');
+});
+
 // Routes
 app.use('/api', router);
 
