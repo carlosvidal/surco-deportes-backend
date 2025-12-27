@@ -51,9 +51,28 @@ router.get('/metricas/hoy', authMiddleware, MetricasController.getMetricasHoy);
 router.get('/metricas/mes', authMiddleware, MetricasController.getMetricasMes);
 router.get('/metricas/vecinos-frecuentes', authMiddleware, MetricasController.getVecinosFrecuentes);
 
-// Health check
-router.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+// Health check - verifica que el servidor y la BD estén funcionando
+router.get('/health', async (req, res) => {
+  try {
+    // Verifica la conexión a la base de datos
+    const { PrismaClient } = await import('@prisma/client');
+    const prisma = new PrismaClient();
+    await prisma.$queryRaw`SELECT 1`;
+    await prisma.$disconnect();
+
+    res.json({
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      database: 'connected'
+    });
+  } catch (error) {
+    res.status(503).json({
+      status: 'error',
+      timestamp: new Date().toISOString(),
+      database: 'disconnected',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
 });
 
 export default router;
