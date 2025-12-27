@@ -18,6 +18,9 @@ COPY . .
 RUN npx prisma generate
 RUN npm run build
 
+# Compile seed file for production
+RUN npx tsc prisma/seed.ts --outDir dist/prisma --moduleResolution node --esModuleInterop --resolveJsonModule --skipLibCheck
+
 # Production stage
 FROM node:20-alpine
 
@@ -32,9 +35,10 @@ COPY prisma ./prisma/
 # Install production dependencies
 RUN npm ci --only=production
 
-# Copy built files and Prisma client
+# Copy built files, seed script, and Prisma client
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app/prisma/schema.prisma ./prisma/schema.prisma
 
 EXPOSE 3000
 
